@@ -5,16 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 
-
 app = FastAPI()
-@app.get("/")
-def read_root():
-    return {"message": "API is running"}
 
 # Enable CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins, update if needed
+    allow_origins=[" use * to allow all or provide your frontend link to access backend"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -23,7 +19,7 @@ app.add_middleware(
 # Fetch API Key securely from environment variables
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    raise ValueError("❌ GEMINI_API_KEY is missing. Set it in your environment variables.")
+    raise ValueError("❌ GEMINI_API_KEY is missing. Set it in Render Environment Variables.")
 
 # Configure Gemini API
 genai.configure(api_key=GEMINI_API_KEY)
@@ -44,6 +40,7 @@ def scrape_website(url: str):
             raise HTTPException(status_code=400, detail="No readable content found on the webpage.")
 
         return {"title": title, "content": content}
+    
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"🔴 Error fetching website: {str(e)}")
 
@@ -51,9 +48,11 @@ def scrape_website(url: str):
 def generate_content(prompt: str):
     """Generates content based on a structured prompt."""
     try:
-        model = genai.GenerativeModel("gemini-pro")  # Corrected model name
+        model = genai.GenerativeModel("specify-your-api-model")
         response = model.generate_content(prompt)
-        return response.text.strip() if hasattr(response, "text") else "⚠️ Error: No response from AI."
+        if response and hasattr(response, "text"):
+            return response.text.strip()
+        return "⚠️ Error: No response from AI."
     except Exception as e:
         return f"❌ AI Generation Error: {str(e)}"
 
@@ -68,6 +67,7 @@ def generate(
     content_type: str = Form("instagram"),  # Default to Instagram
 ):
     """Handles content generation for Instagram, Blog, and Twitter based on user selection."""
+    
     scraped_data_prompt = ""
     user_details_prompt = ""
     
@@ -89,9 +89,11 @@ def generate(
         """
 
     # Generate content based on selection
-    prompt_templates = {
-        "instagram": """
-        You are an expert social media content creator. Generate an **Instagram post**
+    generated_content = ""
+
+    if content_type == "instagram":
+        prompt = f"""
+        You are an expert social media content creator. Generate an **Instagram post** 
         based on the details below:
 
         {scraped_data_prompt}
@@ -103,12 +105,15 @@ def generate(
         - Include **5-7 relevant hashtags**
         - Make it visually appealing
 
-        Format:
-        **Caption:**
-        **Hashtags:**
-        """,
-        "blog": """
-        You are a professional content writer. Generate a well-structured **blog article**
+        Format:  
+        **Caption:**  
+        **Hashtags:**  
+        """
+        generated_content = generate_content(prompt)
+
+    elif content_type == "blog":
+        prompt = f"""
+        You are a professional content writer. Generate a well-structured **blog article** 
         based on the details below:
 
         {scraped_data_prompt}
@@ -121,14 +126,17 @@ def generate(
         - Use an **engaging and professional tone**
         - Format the response with headings and bullet points
 
-        Format:
-        **Title:**
-        **Introduction:**
-        **Main Content:**
-        **Conclusion:**
-        """,
-        "twitter": """
-        You are an expert in crafting **engaging Twitter posts**. Generate a compelling tweet
+        Format:  
+        **Title:**  
+        **Introduction:**  
+        **Main Content:**  
+        **Conclusion:**  
+        """
+        generated_content = generate_content(prompt)
+
+    elif content_type == "twitter":
+        prompt = f"""
+        You are an expert in crafting **engaging Twitter posts**. Generate a compelling tweet 
         based on the details below:
 
         {scraped_data_prompt}
@@ -140,14 +148,14 @@ def generate(
         - Include **2-5 trending hashtags**
         - Encourage user engagement
 
-        Format:
-        **Tweet:**
-        **Hashtags:**
+        Format:  
+        **Tweet:**  
+        **Hashtags:**  
         """
-    }
-    
-    prompt = prompt_templates.get(content_type, "⚠️ Invalid content type selected.")
-    generated_content = generate_content(prompt.format(scraped_data_prompt=scraped_data_prompt, user_details_prompt=user_details_prompt))
+        generated_content = generate_content(prompt)
+
+    else:
+        generated_content = "⚠️ Invalid content type selected."
 
     # Return generated content
     return {"content_type": content_type, "generated_content": generated_content or "⚠️ No content generated."}
